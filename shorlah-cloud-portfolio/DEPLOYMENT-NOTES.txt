@@ -1,0 +1,35 @@
+SHORLAH CLOUD PORTFOLIO — DEPLOYMENT NOTES
+
+What is ready in this source package:
+- Full responsive React portfolio pages.
+- Supabase reads for public projects, skills, profile, and private-bucket project images.
+- Contact form inserts into contact_messages.
+- /admin login and dashboard for projects, visibility/publishing, skills, profile details, social links, and contact messages.
+- Official Shorlah Cloud monogram logo integrated into public navigation, admin navigation, login, and favicon.
+- Netlify SPA redirect config.
+
+Important honest limitation:
+The local build could not be run in the working environment because npm registry DNS requests timed out (EAI_AGAIN). JavaScript/JSX syntax checks passed, but a full production build still needs to run in Netlify or another npm-enabled environment.
+
+Netlify build settings (already in netlify.toml):
+- Build command: npm run build
+- Publish directory: dist
+- Node will install dependencies from package.json.
+
+Supabase config:
+The browser URL and publishable key are included as public client values in src/lib/supabaseClient.js. They are not service-role credentials. Never add a service-role or secret key to this project.
+
+Admin:
+Visit /admin and sign in using the existing Supabase Auth account already authorised in public.admin_users. The dashboard checks the public.is_admin() function before exposing data or editing actions. If login succeeds but administrator access is denied, inspect the existing admin_users row and is_admin() function in Supabase; do not disable RLS or expose a service-role key. The frontend cannot recover the account password.
+
+Before publishing NPFL+:
+Its database record remains published=false and its current description explicitly contains placeholder copy. Replace and review the case study before checking Publish publicly.
+
+Security review still outstanding in Supabase:
+The security advisor reported public API execution grants on public.is_admin() and public.contact_messages_throttle(), and disabled leaked-password protection. Review these before production hardening; this frontend update did not change database security.
+
+Release verification status (2026-10-22):
+- Logo asset added to public assets and wired into public/admin branding.
+- Admin editing sections are included in the source.
+- Social links SQL migration is included and must be run in the existing Supabase project if not already applied.
+- A full Vite production build could not be verified in this environment because npm dependency installation timed out. Run npm install and npm run build in an npm-enabled environment before treating this ZIP as a verified release.

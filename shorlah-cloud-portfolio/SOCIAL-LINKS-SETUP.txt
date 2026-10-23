@@ -1,0 +1,31 @@
+SHORLAH CLOUD — SOCIAL MEDIA MANAGER SETUP
+
+This update adds a Social Media Manager to /admin and dynamically renders enabled links on the public website.
+
+ONE-TIME DATABASE STEP
+1. Open your Supabase project: https://supabase.com/dashboard/project/cwhfmiegabiblndeecgu
+2. Open SQL Editor and create a new query.
+3. Open supabase/migrations/202610220001_social_links.sql from this ZIP, copy all of its contents into the SQL Editor, and run it once.
+4. Confirm the query succeeds. This creates only the new social_links table and its row-level security policies; it does not recreate or delete existing tables/data.
+
+DEPLOY
+1. Extract this ZIP on your computer.
+2. Build the Vite project using npm install, then npm run build. Ensure the VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables are set to the existing project's URL and public publishable key during build.
+3. Deploy the generated dist folder to Netlify (or use your existing Git-based deployment workflow).
+4. Visit your portfolio's /admin route and sign in with the existing admin account.
+5. Open Social links, add a platform + full https:// profile URL, choose where it should appear, and save.
+
+SECURITY
+- Only visible social links can be read by public visitors.
+- Insert/update/delete are restricted by the existing public.is_admin() check to authorised admins.
+- Never add a Supabase service-role or secret key to this frontend project.
+
+PLACEMENT
+- Header: compact icon links in the top bar.
+- Footer: links in the site footer.
+- Contact: links appear in a dedicated “Find me online” area on the Contact page, not in the footer.
+- TikTok, X, and WhatsApp use compact text badges; other supported platforms use Lucide icons.
+- Public pages refresh social links when the database changes and when a visitor returns to the tab.
+
+NOTE
+The source code and migration are included. Run npm run build before deploying and confirm the migration has been applied to Supabase.
