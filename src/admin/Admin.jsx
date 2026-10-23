@@ -22,8 +22,70 @@ export default function Admin(){
  useEffect(()=>{if(isAdmin)loadData();},[isAdmin]);
  function openProject(p){setEditingProject(p?.id??null);setImageFiles([]);setProjectForm(p?{...blankProject,...p,technologies:p.technologies||'',categories:p.categories||'',display_order:p.display_order??10}:blankProject);setTab('project-editor');setError('');setSuccess('');}
  function updateProjectField(e){const {name,value,type,checked}=e.target;setProjectForm(f=>({...f,[name]:type==='checkbox'?checked:value,...(name==='title'&&editingProject===null?{slug:slugify(value)}:{})}));}
- async function saveProject(e){e.preventDefault();if(!supabase)return;setSaving(true);setError('');setSuccess('');const payload={...projectForm,title:projectForm.title.trim(),slug:projectForm.slug.trim(),short_description:projectForm.short_description.trim(),description:projectForm.description.trim(),categories:projectForm.categories.trim(),technologies:projectForm.technologies.trim()||null,live_url:projectForm.live_url.trim()||null,repository_url:projectForm.repository_url.trim()||null,thumbnail_url:projectForm.thumbnail_url.trim()||null,display_order:Number(projectForm.display_order)||0};const result=editingProject?await supabase.from('projects').update(payload).eq('id',editingProject).select('id').single():await supabase.from('projects').insert(payload).select('id').single();if(result.error){setSaving(false);setError(`Could not save project: ${result.error.message}`);return;}const projectId=result.data?.id||editingProject;let uploadIssue='';for(let i=0;i<imageFiles.length;i++){const file=imageFiles[i];const safeName=file.name.toLowerCase().replace(/[^a-z0-9._-]+/g,'-');const path=`${projectId}/${Date.now()}-${i}-${safeName}`;const {error:uploadError}=await supabase.storage.from('project-images').upload(path,file,{contentType:file.type,upsert:false});if(uploadError){uploadIssue=uploadError.message;break;}const {error:rowError}=await supabase.from('project_images').insert({project_id:projectId,storage_path:path,alt_text:`${projectForm.title} project image`,sort_order:i});if(rowError){uploadIssue=rowError.message;break;}}setSaving(false);setImageFiles([]);if(uploadIssue){setError(`Project saved, but an image could not be added: ${uploadIssue}`);return;}setSuccess('Project saved.');await loadData();setTab('projects');setEditingProject(null);}
- async function togglePublished(p){const {error:e}=await supabase.from('projects').update({published:!p.published}).eq('id',p.id);if(e){setError(`Could not change publish status: ${e.message}`);return;}setSuccess(`${p.title} ${p.published?'unpublished':'published'}.`);loadData();}
+ async function saveProject(e){
+  e.preventDefault();
+  if(!supabase || saving) return;
+  setSaving(true);
+  setError('');
+  setSuccess('');
+
+  const withTimeout = (promise, label) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after 20 seconds. Check your connection and try again.`)), 20000))
+  ]);
+
+  try {
+    const payload={
+      ...projectForm,
+      title:projectForm.title.trim(),
+      slug:projectForm.slug.trim(),
+      short_description:projectForm.short_description.trim(),
+      description:projectForm.description.trim(),
+      categories:projectForm.categories.trim(),
+      technologies:projectForm.technologies.trim()||null,
+      live_url:projectForm.live_url.trim()||null,
+      repository_url:projectForm.repository_url.trim()||null,
+      thumbnail_url:projectForm.thumbnail_url.trim()||null,
+      display_order:Number(projectForm.display_order)||0
+    };
+
+    const result = await withTimeout(
+      editingProject
+        ? supabase.from('projects').update(payload).eq('id',editingProject).select('id').single()
+        : supabase.from('projects').insert(payload).select('id').single(),
+      'Saving project'
+    );
+    if(result.error) throw new Error(result.error.message);
+    const projectId=result.data?.id||editingProject;
+    if(!projectId) throw new Error('The project was saved but its ID could not be confirmed.');
+
+    for(let i=0;i<imageFiles.length;i++){
+      const file=imageFiles[i];
+      const safeName=file.name.toLowerCase().replace(/[^a-z0-9._-]+/g,'-');
+      const path=`${projectId}/${Date.now()}-${i}-${safeName}`;
+      const uploadResult=await withTimeout(
+        supabase.storage.from('project-images').upload(path,file,{contentType:file.type,upsert:false}),
+        'Uploading project image'
+      );
+      if(uploadResult.error) throw new Error(`Project saved, but image upload failed: ${uploadResult.error.message}`);
+      const rowResult=await withTimeout(
+        supabase.from('project_images').insert({project_id:projectId,storage_path:path,alt_text:`${projectForm.title} project image`,sort_order:i}),
+        'Saving project image details'
+      );
+      if(rowResult.error) throw new Error(`Project saved, but image details could not be saved: ${rowResult.error.message}`);
+    }
+
+    setImageFiles([]);
+    setSuccess('Project saved successfully.');
+    setEditingProject(null);
+    setTab('projects');
+    await loadData();
+  } catch(err) {
+    setError(err?.message || 'Could not save the project. Please try again.');
+  } finally {
+    setSaving(false);
+  }
+} async function togglePublished(p){const {error:e}=await supabase.from('projects').update({published:!p.published}).eq('id',p.id);if(e){setError(`Could not change publish status: ${e.message}`);return;}setSuccess(`${p.title} ${p.published?'unpublished':'published'}.`);loadData();}
  async function saveSkill(e){e.preventDefault();setSaving(true);setError('');const payload={name:skillForm.name.trim(),category:skillForm.category.trim()||'Other',icon:skillForm.icon.trim()||null,proficiency:skillForm.proficiency===''?null:Number(skillForm.proficiency),display_order:Number(skillForm.display_order)||0,visible:skillForm.visible};const {error:e2}=await supabase.from('Skills').insert(payload);setSaving(false);if(e2){setError(`Could not add skill: ${e2.message}`);return;}setSkillForm(blankSkill);setSuccess('Skill added.');loadData();}
  async function toggleSkill(s){const {error:e}=await supabase.from('Skills').update({visible:!s.visible}).eq('id',s.id);if(e){setError(`Could not update skill: ${e.message}`);return;}setSuccess(`${s.name} ${s.visible?'hidden':'visible'}.`);loadData();}
  async function markMessage(m,status){const {error:e}=await supabase.from('contact_messages').update({status,...(status==='read'?{read_at:new Date().toISOString()}:{})}).eq('id',m.id);if(e){setError(`Could not update message: ${e.message}`);return;}setSuccess('Message status updated.');loadData();}
